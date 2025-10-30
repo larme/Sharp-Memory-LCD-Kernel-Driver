@@ -53,8 +53,7 @@
 				disp-gpios = <&gpio 22 0>;
 
 				spi-cs-high = <1>;
-				spi-max-frequency = <2000000>;
-				spi-lsb-first;
+				spi-max-frequency = <8000000>;
 				buswidth = <8>;
 				debug = <0>;
 			};

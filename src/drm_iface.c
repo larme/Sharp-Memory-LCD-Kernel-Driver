@@ -38,8 +38,6 @@
 
 #define CMD_WRITE_LINE 0b10000000
 #define CMD_CLEAR_SCREEN 0b00100000
-#define VCOM_HI 0b01000000
-#define VCOM_LO 0b00000000
 
 struct sharp_memory_panel {
 	struct drm_device drm;
@@ -50,7 +48,6 @@ struct sharp_memory_panel {
 	struct drm_framebuffer *fb;
 
 	struct timer_list vcom_timer;
-	u8 vcom_state;
 
 	unsigned int height;
 	unsigned int width;
@@ -75,10 +72,13 @@ static inline struct sharp_memory_panel *drm_to_panel(struct drm_device *drm)
 
 static void vcom_timer_callback(struct timer_list *t)
 {
+	static u8 vcom_setting = 0;
+
 	struct sharp_memory_panel *panel = from_timer(panel, t, vcom_timer);
 
-	// Toggle the VCOM state for software control
-	panel->vcom_state = (panel->vcom_state == VCOM_HI) ? VCOM_LO : VCOM_HI;
+	// Toggle the GPIO pin
+	vcom_setting = (vcom_setting) ? 0 : 1;
+	gpiod_set_value(panel->gpio_vcom, vcom_setting);
 
 	// Reschedule the timer
 	mod_timer(&panel->vcom_timer, jiffies + msecs_to_jiffies(1000));
@@ -89,7 +89,7 @@ static int sharp_memory_spi_clear_screen(struct sharp_memory_panel *panel)
 	int rc;
 
 	// Create screen clear command SPI transfer
-	panel->cmd_buf[0] = CMD_CLEAR_SCREEN | panel->vcom_state;
+	panel->cmd_buf[0] = CMD_CLEAR_SCREEN;
 	panel->spi_3_xfers[0].tx_buf = panel->cmd_buf;
 	panel->spi_3_xfers[0].len = 1;
 	panel->trailer_buf[0] = 0;
@@ -118,7 +118,7 @@ static int sharp_memory_spi_write_tagged_lines(struct sharp_memory_panel *panel,
 	int rc;
 
 	// Write line command
-	panel->cmd_buf[0] = CMD_WRITE_LINE | panel->vcom_state;
+	panel->cmd_buf[0] = CMD_WRITE_LINE;
 	panel->spi_3_xfers[0].tx_buf = panel->cmd_buf;
 	panel->spi_3_xfers[0].len = 1;
 
@@ -219,8 +219,9 @@ static size_t sharp_memory_gray8_to_mono_tagged(u8 *buf, int width, int height, 
 			buf[(line * tagged_line_len) + 1 + (b8 / 8)] = d;
 		}
 
-		// Write the line number and trailer tags
-		buf[line * tagged_line_len] = (u8)(y0 + 1); // Indexed from 1, no bit reversal needed
+		// Write the line number and trailer tags  
+		// Try inverting line order - maybe display is upside down
+		buf[line * tagged_line_len] = (u8)(height - line + y0); // Try reversed line numbering
 		buf[(line * tagged_line_len) + tagged_line_len - 1] = 0;
 		y0++;
 	}
@@ -290,6 +291,9 @@ static int sharp_memory_fb_dirty(struct drm_framebuffer *fb,
 	int drm_idx;
 	size_t buf_len;
 
+	printk(KERN_INFO "sharp_memory: fb_dirty called, rect=(%d,%d,%d,%d)\n", 
+		dirty_rect->x1, dirty_rect->y1, dirty_rect->x2, dirty_rect->y2);
+
 
 	// Clip dirty region rows
 	clip.x1 = 0;
@@ -326,8 +330,9 @@ static void power_off(struct sharp_memory_panel *panel)
 {
 	printk(KERN_INFO "sharp_memory: powering off\n");
 
-	/* Turn off power */
+	/* Turn off power and all signals */
 	gpiod_set_value(panel->gpio_disp, 0);
+	gpiod_set_value(panel->gpio_vcom, 0);
 }
 
 static void sharp_memory_pipe_enable(struct drm_simple_display_pipe *pipe,
@@ -350,10 +355,8 @@ static void sharp_memory_pipe_enable(struct drm_simple_display_pipe *pipe,
 
 	// Power up sequence
 	gpiod_set_value(panel->gpio_disp, 1);
+	gpiod_set_value(panel->gpio_vcom, 0);
 	usleep_range(5000, 10000);
-
-	// Initialize VCOM state for software control
-	panel->vcom_state = VCOM_LO;
 
 	// Clear display
 	printk(KERN_INFO "sharp_memory: clearing display\n");
