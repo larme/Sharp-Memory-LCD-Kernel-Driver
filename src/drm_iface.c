@@ -207,6 +207,9 @@ static size_t sharp_memory_gray8_to_mono_tagged(u8 *buf, int width, int height, 
 				d = ~d;
 			}
 
+			// Sharp Memory LCD requires LSB first (bit reversed) pixel data
+			d = sharp_memory_reverse_byte(d);
+
 			// Without the line number and trailer tags, each destination
 			// mono line would have a length `width / 8`. However, we are
 			// inserting the line number at the beginning of the line and
