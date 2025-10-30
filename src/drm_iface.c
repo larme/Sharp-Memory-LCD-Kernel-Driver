@@ -290,6 +290,9 @@ static int sharp_memory_fb_dirty(struct drm_framebuffer *fb,
 	int drm_idx;
 	size_t buf_len;
 
+	printk(KERN_INFO "sharp_memory: fb_dirty called, rect=(%d,%d,%d,%d)\n",
+		dirty_rect->x1, dirty_rect->y1, dirty_rect->x2, dirty_rect->y2);
+
 	// Clip dirty region rows
 	clip.x1 = 0;
 	clip.x2 = fb->width;
@@ -361,6 +364,31 @@ static void sharp_memory_pipe_enable(struct drm_simple_display_pipe *pipe,
 		goto out_exit;
 	}
 	printk(KERN_INFO "sharp_memory: display cleared successfully");
+
+	// Write a simple test pattern to verify SPI communication
+	{
+		u8 test_line[52]; // 400/8 + 2 = 52 bytes per line (line# + 50 pixel bytes + trailer)
+		int i;
+
+		// Create a test pattern: alternating lines
+		memset(test_line, 0, sizeof(test_line));
+		test_line[0] = 1; // Line 1
+		for (i = 1; i < 51; i++) {
+			test_line[i] = 0xAA; // Alternating pixels
+		}
+		test_line[51] = 0; // Trailer
+
+		printk(KERN_INFO "sharp_memory: writing test pattern to line 1\n");
+		sharp_memory_spi_write_tagged_lines(panel, test_line, sizeof(test_line));
+
+		// Write line 10 with different pattern
+		test_line[0] = 10; // Line 10
+		for (i = 1; i < 51; i++) {
+			test_line[i] = 0x55; // Different alternating pixels
+		}
+		printk(KERN_INFO "sharp_memory: writing test pattern to line 10\n");
+		sharp_memory_spi_write_tagged_lines(panel, test_line, sizeof(test_line));
+	}
 
 	// Initialize and schedule the VCOM timer
 	timer_setup(&panel->vcom_timer, vcom_timer_callback, 0);
