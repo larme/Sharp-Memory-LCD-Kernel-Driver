@@ -18,6 +18,7 @@
 #include <drm/drm_drv.h>
 #include <drm/drm_fb_dma_helper.h>
 #include <drm/drm_fb_helper.h>
+#include <drm/drm_fbdev_dma.h>
 #include <drm/drm_format_helper.h>
 #include <drm/drm_framebuffer.h>
 #include <drm/drm_gem_atomic_helper.h>
@@ -397,7 +398,7 @@ static const struct drm_simple_display_pipe_funcs sharp_memory_pipe_funcs = {
 	.enable = sharp_memory_pipe_enable,
 	.disable = sharp_memory_pipe_disable,
 	.update = sharp_memory_pipe_update,
-	.prepare_fb = drm_gem_plane_helper_prepare_fb,
+	.prepare_fb = NULL,
 };
 
 static int sharp_memory_connector_get_modes(struct drm_connector *connector)
@@ -561,7 +562,7 @@ int drm_probe(struct spi_device *spi)
 
 	// fbdev setup
 	spi_set_drvdata(spi, drm);
-	drm_fbdev_shmem_setup(drm, 0);
+	drm_fbdev_dma_setup(drm, 0);
 
 	printk(KERN_INFO "sharp_memory: successful probe\n");
 
