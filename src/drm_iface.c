@@ -38,6 +38,8 @@
 
 #define CMD_WRITE_LINE 0b10000000
 #define CMD_CLEAR_SCREEN 0b00100000
+#define VCOM_HI 0b01000000
+#define VCOM_LO 0b00000000
 
 struct sharp_memory_panel {
 	struct drm_device drm;
@@ -48,6 +50,7 @@ struct sharp_memory_panel {
 	struct drm_framebuffer *fb;
 
 	struct timer_list vcom_timer;
+	u8 vcom_state;
 
 	unsigned int height;
 	unsigned int width;
@@ -72,13 +75,10 @@ static inline struct sharp_memory_panel *drm_to_panel(struct drm_device *drm)
 
 static void vcom_timer_callback(struct timer_list *t)
 {
-	static u8 vcom_setting = 0;
-
 	struct sharp_memory_panel *panel = from_timer(panel, t, vcom_timer);
 
-	// Toggle the GPIO pin
-	vcom_setting = (vcom_setting) ? 0 : 1;
-	gpiod_set_value(panel->gpio_vcom, vcom_setting);
+	// Toggle the VCOM state for software control
+	panel->vcom_state = (panel->vcom_state == VCOM_HI) ? VCOM_LO : VCOM_HI;
 
 	// Reschedule the timer
 	mod_timer(&panel->vcom_timer, jiffies + msecs_to_jiffies(1000));
@@ -89,7 +89,7 @@ static int sharp_memory_spi_clear_screen(struct sharp_memory_panel *panel)
 	int rc;
 
 	// Create screen clear command SPI transfer
-	panel->cmd_buf[0] = CMD_CLEAR_SCREEN;
+	panel->cmd_buf[0] = CMD_CLEAR_SCREEN | panel->vcom_state;
 	panel->spi_3_xfers[0].tx_buf = panel->cmd_buf;
 	panel->spi_3_xfers[0].len = 1;
 	panel->trailer_buf[0] = 0;
@@ -118,7 +118,7 @@ static int sharp_memory_spi_write_tagged_lines(struct sharp_memory_panel *panel,
 	int rc;
 
 	// Write line command
-	panel->cmd_buf[0] = CMD_WRITE_LINE;
+	panel->cmd_buf[0] = CMD_WRITE_LINE | panel->vcom_state;
 	panel->spi_3_xfers[0].tx_buf = panel->cmd_buf;
 	panel->spi_3_xfers[0].len = 1;
 
@@ -206,9 +206,6 @@ static size_t sharp_memory_gray8_to_mono_tagged(u8 *buf, int width, int height, 
 			if (g_param_mono_invert) {
 				d = ~d;
 			}
-
-			// Sharp Memory LCD requires LSB first (bit reversed) pixel data
-			d = sharp_memory_reverse_byte(d);
 
 			// Without the line number and trailer tags, each destination
 			// mono line would have a length `width / 8`. However, we are
@@ -329,9 +326,8 @@ static void power_off(struct sharp_memory_panel *panel)
 {
 	printk(KERN_INFO "sharp_memory: powering off\n");
 
-	/* Turn off power and all signals */
+	/* Turn off power */
 	gpiod_set_value(panel->gpio_disp, 0);
-	gpiod_set_value(panel->gpio_vcom, 0);
 }
 
 static void sharp_memory_pipe_enable(struct drm_simple_display_pipe *pipe,
@@ -354,8 +350,10 @@ static void sharp_memory_pipe_enable(struct drm_simple_display_pipe *pipe,
 
 	// Power up sequence
 	gpiod_set_value(panel->gpio_disp, 1);
-	gpiod_set_value(panel->gpio_vcom, 0);
 	usleep_range(5000, 10000);
+
+	// Initialize VCOM state for software control
+	panel->vcom_state = VCOM_LO;
 
 	// Clear display
 	printk(KERN_INFO "sharp_memory: clearing display\n");
