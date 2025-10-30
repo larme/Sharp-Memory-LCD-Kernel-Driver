@@ -77,7 +77,7 @@ int ioctl_probe(void)
 		return rc;
 	}
 
-	g_class = class_create(THIS_MODULE, "sharp_class");
+	g_class = class_create("sharp_class");
 	device_create(g_class, NULL, g_dev, NULL, "sharp");
 
 	cdev_init(&g_cdev, &fops);

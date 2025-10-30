@@ -18,6 +18,7 @@
 #include <drm/drm_drv.h>
 #include <drm/drm_fb_dma_helper.h>
 #include <drm/drm_fb_helper.h>
+#include <drm/drm_fbdev_dma.h>
 #include <drm/drm_format_helper.h>
 #include <drm/drm_framebuffer.h>
 #include <drm/drm_gem_atomic_helper.h>
@@ -77,7 +78,7 @@ static void vcom_timer_callback(struct timer_list *t)
 
 	// Toggle the GPIO pin
 	vcom_setting = (vcom_setting) ? 0 : 1;
-	gpiod_set_value(panel->gpio_vcom, 1);
+	gpiod_set_value(panel->gpio_vcom, vcom_setting);
 
 	// Reschedule the timer
 	mod_timer(&panel->vcom_timer, jiffies + msecs_to_jiffies(1000));
@@ -250,7 +251,7 @@ static int sharp_memory_clip_mono_tagged(struct sharp_memory_panel* panel, size_
 	iosys_map_set_vaddr(&dst, buf);
 	iosys_map_set_vaddr(&vmap, dma_obj->vaddr);
 	// DMA `clip` into `buf` and convert to 8-bit grayscale
-	drm_fb_xrgb8888_to_gray8(&dst, NULL, &vmap, fb, clip);
+	drm_fb_xrgb8888_to_gray8(&dst, NULL, &vmap, fb, clip, NULL);
 
 	// End DMA area
 	drm_gem_fb_end_cpu_access(fb, DMA_FROM_DEVICE);
@@ -397,7 +398,7 @@ static const struct drm_simple_display_pipe_funcs sharp_memory_pipe_funcs = {
 	.enable = sharp_memory_pipe_enable,
 	.disable = sharp_memory_pipe_disable,
 	.update = sharp_memory_pipe_update,
-	.prepare_fb = drm_gem_simple_display_pipe_prepare_fb,
+	.prepare_fb = NULL,
 };
 
 static int sharp_memory_connector_get_modes(struct drm_connector *connector)
@@ -561,7 +562,7 @@ int drm_probe(struct spi_device *spi)
 
 	// fbdev setup
 	spi_set_drvdata(spi, drm);
-	drm_fbdev_generic_setup(drm, 0);
+	drm_fbdev_dma_setup(drm, 0);
 
 	printk(KERN_INFO "sharp_memory: successful probe\n");
 
