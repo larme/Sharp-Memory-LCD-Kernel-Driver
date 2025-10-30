@@ -118,7 +118,7 @@ static int sharp_memory_spi_write_tagged_lines(struct sharp_memory_panel *panel,
 	int rc;
 
 	// Write line command
-	panel->cmd_buf[0] = 0b10000000;
+	panel->cmd_buf[0] = CMD_WRITE_LINE;
 	panel->spi_3_xfers[0].tx_buf = panel->cmd_buf;
 	panel->spi_3_xfers[0].len = 1;
 
@@ -220,7 +220,7 @@ static size_t sharp_memory_gray8_to_mono_tagged(u8 *buf, int width, int height, 
 		}
 
 		// Write the line number and trailer tags
-		buf[line * tagged_line_len] = sharp_memory_reverse_byte((u8)(y0 + 1)); // Indexed from 1
+		buf[line * tagged_line_len] = (u8)(y0 + 1); // Indexed from 1, no bit reversal needed
 		buf[(line * tagged_line_len) + tagged_line_len - 1] = 0;
 		y0++;
 	}
@@ -354,10 +354,13 @@ static void sharp_memory_pipe_enable(struct drm_simple_display_pipe *pipe,
 	usleep_range(5000, 10000);
 
 	// Clear display
+	printk(KERN_INFO "sharp_memory: clearing display\n");
 	if (sharp_memory_spi_clear_screen(panel)) {
+		printk(KERN_ERR "sharp_memory: failed to clear display\n");
 		gpiod_set_value(panel->gpio_disp, 0); // Power down display, VCOM is not running
 		goto out_exit;
 	}
+	printk(KERN_INFO "sharp_memory: display cleared successfully");
 
 	// Initialize and schedule the VCOM timer
 	timer_setup(&panel->vcom_timer, vcom_timer_callback, 0);
