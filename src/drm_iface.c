@@ -254,8 +254,11 @@ static int sharp_memory_clip_mono_tagged(struct sharp_memory_panel* panel, size_
 	// Initialize destination (buf) and source (video)
 	iosys_map_set_vaddr(&dst, buf);
 	iosys_map_set_vaddr(&vmap, dma_obj->vaddr);
+	// Calculate proper pitch for destination buffer (bytes per line)
+	// For grayscale conversion, pitch should match how mono conversion reads data
+	unsigned int dst_pitch = clip->x2 - clip->x1;  // Width in pixels = stride for grayscale
 	// DMA `clip` into `buf` and convert to 8-bit grayscale
-	drm_fb_xrgb8888_to_gray8(&dst, NULL, &vmap, fb, clip, &fmtcnv_state);
+	drm_fb_xrgb8888_to_gray8(&dst, &dst_pitch, &vmap, fb, clip, &fmtcnv_state);
 
 	// End DMA area
 	drm_gem_fb_end_cpu_access(fb, DMA_FROM_DEVICE);
@@ -274,8 +277,12 @@ static int sharp_memory_clip_mono_tagged(struct sharp_memory_panel* panel, size_
 	*result_len = sharp_memory_gray8_to_mono_tagged(buf,
 		(clip->x2 - clip->x1), (clip->y2 - clip->y1), clip->y1);
 
-	printk(KERN_INFO "sharp_memory: converted %dx%d pixels, result_len=%zu, starting at line %d\n",
-		(clip->x2 - clip->x1), (clip->y2 - clip->y1), *result_len, clip->y1);
+	printk(KERN_INFO "sharp_memory: converted %dx%d pixels, result_len=%zu, starting at line %d, dst_pitch=%u\n",
+		(clip->x2 - clip->x1), (clip->y2 - clip->y1), *result_len, clip->y1, dst_pitch);
+
+	// Debug: Check first few bytes of converted data
+	printk(KERN_INFO "sharp_memory: first 8 bytes of line data: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+		buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
 
 	// Release format conversion state
 	drm_format_conv_state_release(&fmtcnv_state);
