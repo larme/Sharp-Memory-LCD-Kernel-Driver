@@ -574,6 +574,10 @@ int drm_probe(struct spi_device *spi)
 	spi_set_drvdata(spi, drm);
 	drm_fbdev_dma_setup(drm, 0);
 
+	// Force display enable for testing
+	printk(KERN_INFO "sharp_memory: forcing display enable for testing\n");
+	sharp_memory_pipe_enable(&panel->pipe, NULL, NULL);
+
 	printk(KERN_INFO "sharp_memory: successful probe\n");
 
 	return 0;
