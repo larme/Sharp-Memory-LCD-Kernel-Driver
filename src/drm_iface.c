@@ -182,7 +182,7 @@ static size_t sharp_memory_gray8_to_mono_tagged(u8 *buf, int width, int height, 
 {
 	int line, b8, b1;
 	unsigned char d;
-	int const tagged_line_len = 2 + width / 8;
+	int const tagged_line_len = 1 + width / 8;  // Only line number + data, no per-line trailer
 
 	// Iterate over lines from [0, height)
 	for (line = 0; line < height; line++) {
@@ -219,13 +219,14 @@ static size_t sharp_memory_gray8_to_mono_tagged(u8 *buf, int width, int height, 
 			buf[(line * tagged_line_len) + 1 + (b8 / 8)] = d;
 		}
 
-		// Write the line number and trailer tags
+		// Write the line number (no per-line trailer in multi-line mode)
 		buf[line * tagged_line_len] = (u8)(y0 + 1); // Indexed from 1
-		buf[(line * tagged_line_len) + tagged_line_len - 1] = 0;
 		y0++;
 	}
 
-	return height * tagged_line_len;
+	// Add final trailer byte for multi-line mode
+	buf[height * tagged_line_len] = 0;
+	return height * tagged_line_len + 1;  // Include the final trailer byte
 }
 
 // Use DMA to get grayscale representation, then convert to mono
