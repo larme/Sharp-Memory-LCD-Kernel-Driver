@@ -219,9 +219,8 @@ static size_t sharp_memory_gray8_to_mono_tagged(u8 *buf, int width, int height, 
 			buf[(line * tagged_line_len) + 1 + (b8 / 8)] = d;
 		}
 
-		// Write the line number and trailer tags  
-		// Try inverting line order - maybe display is upside down
-		buf[line * tagged_line_len] = (u8)(height - line + y0); // Try reversed line numbering
+		// Write the line number and trailer tags
+		buf[line * tagged_line_len] = (u8)(y0 + 1); // Indexed from 1
 		buf[(line * tagged_line_len) + tagged_line_len - 1] = 0;
 		y0++;
 	}
@@ -275,6 +274,9 @@ static int sharp_memory_clip_mono_tagged(struct sharp_memory_panel* panel, size_
 	*result_len = sharp_memory_gray8_to_mono_tagged(buf,
 		(clip->x2 - clip->x1), (clip->y2 - clip->y1), clip->y1);
 
+	printk(KERN_INFO "sharp_memory: converted %dx%d pixels, result_len=%zu, starting at line %d\n",
+		(clip->x2 - clip->x1), (clip->y2 - clip->y1), *result_len, clip->y1);
+
 	// Release format conversion state
 	drm_format_conv_state_release(&fmtcnv_state);
 
@@ -291,7 +293,7 @@ static int sharp_memory_fb_dirty(struct drm_framebuffer *fb,
 	int drm_idx;
 	size_t buf_len;
 
-	printk(KERN_INFO "sharp_memory: fb_dirty called, rect=(%d,%d,%d,%d)\n", 
+	printk(KERN_INFO "sharp_memory: fb_dirty called, rect=(%d,%d,%d,%d)\n",
 		dirty_rect->x1, dirty_rect->y1, dirty_rect->x2, dirty_rect->y2);
 
 
