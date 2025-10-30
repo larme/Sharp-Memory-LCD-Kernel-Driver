@@ -250,7 +250,7 @@ static int sharp_memory_clip_mono_tagged(struct sharp_memory_panel* panel, size_
 	iosys_map_set_vaddr(&dst, buf);
 	iosys_map_set_vaddr(&vmap, dma_obj->vaddr);
 	// DMA `clip` into `buf` and convert to 8-bit grayscale
-	drm_fb_xrgb8888_to_gray8(&dst, NULL, &vmap, NULL, fb, clip);
+	drm_fb_xrgb8888_to_gray8(&dst, NULL, &vmap, NULL, clip, NULL);
 
 	// End DMA area
 	drm_gem_fb_end_cpu_access(fb, DMA_FROM_DEVICE);
@@ -397,7 +397,7 @@ static const struct drm_simple_display_pipe_funcs sharp_memory_pipe_funcs = {
 	.enable = sharp_memory_pipe_enable,
 	.disable = sharp_memory_pipe_disable,
 	.update = sharp_memory_pipe_update,
-	.prepare_fb = drm_gem_fb_simple_display_pipe_prepare_fb,
+	.prepare_fb = drm_gem_plane_helper_prepare_fb,
 };
 
 static int sharp_memory_connector_get_modes(struct drm_connector *connector)
@@ -561,7 +561,7 @@ int drm_probe(struct spi_device *spi)
 
 	// fbdev setup
 	spi_set_drvdata(spi, drm);
-	drm_fbdev_dma_setup(drm, 0);
+	drm_fbdev_shmem_setup(drm, 0);
 
 	printk(KERN_INFO "sharp_memory: successful probe\n");
 
