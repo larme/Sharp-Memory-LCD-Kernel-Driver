@@ -78,7 +78,7 @@ static void vcom_timer_callback(struct timer_list *t)
 
 	// Toggle the GPIO pin
 	vcom_setting = (vcom_setting) ? 0 : 1;
-	gpiod_set_value(panel->gpio_vcom, 1);
+	gpiod_set_value(panel->gpio_vcom, vcom_setting);
 
 	// Reschedule the timer
 	mod_timer(&panel->vcom_timer, jiffies + msecs_to_jiffies(1000));
@@ -237,6 +237,7 @@ static int sharp_memory_clip_mono_tagged(struct sharp_memory_panel* panel, size_
 	int rc;
 	struct drm_gem_dma_object *dma_obj;
 	struct iosys_map dst, vmap;
+	struct drm_format_conv_state fmtcnv_state;
 
 	// Get GEM memory manager
 	dma_obj = drm_fb_dma_get_gem_obj(fb, 0);
@@ -247,11 +248,14 @@ static int sharp_memory_clip_mono_tagged(struct sharp_memory_panel* panel, size_
 		return rc;
 	}
 
+	// Initialize format conversion state
+	drm_format_conv_state_init(&fmtcnv_state);
+
 	// Initialize destination (buf) and source (video)
 	iosys_map_set_vaddr(&dst, buf);
 	iosys_map_set_vaddr(&vmap, dma_obj->vaddr);
 	// DMA `clip` into `buf` and convert to 8-bit grayscale
-	drm_fb_xrgb8888_to_gray8(&dst, NULL, &vmap, NULL, clip, NULL);
+	drm_fb_xrgb8888_to_gray8(&dst, NULL, &vmap, fb, clip, &fmtcnv_state);
 
 	// End DMA area
 	drm_gem_fb_end_cpu_access(fb, DMA_FROM_DEVICE);
@@ -269,6 +273,9 @@ static int sharp_memory_clip_mono_tagged(struct sharp_memory_panel* panel, size_
 	// Convert in-place from 8-bit grayscale to mono
 	*result_len = sharp_memory_gray8_to_mono_tagged(buf,
 		(clip->x2 - clip->x1), (clip->y2 - clip->y1), clip->y1);
+
+	// Release format conversion state
+	drm_format_conv_state_release(&fmtcnv_state);
 
 	// Success
 	return 0;
