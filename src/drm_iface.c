@@ -297,11 +297,18 @@ static int sharp_memory_fb_dirty(struct drm_framebuffer *fb,
 		dirty_rect->x1, dirty_rect->y1, dirty_rect->x2, dirty_rect->y2);
 
 
-	// Clip dirty region rows
+	// Clip dirty region rows - expand to full lines for Sharp LCD
 	clip.x1 = 0;
 	clip.x2 = fb->width;
-	clip.y1 = dirty_rect->y1;
-	clip.y2 = dirty_rect->y2;
+	// Sharp LCD works better with complete line updates
+	// Round down to line boundary and round up height to complete lines
+	clip.y1 = (dirty_rect->y1 / 8) * 8;  // Round down to 8-pixel boundary
+	clip.y2 = ((dirty_rect->y2 + 7) / 8) * 8;  // Round up to 8-pixel boundary
+	// Ensure we don't exceed display bounds
+	if (clip.y2 > fb->height) clip.y2 = fb->height;
+
+	printk(KERN_INFO "sharp_memory: expanded clip from (%d,%d) to (%d,%d)\n",
+		dirty_rect->y1, dirty_rect->y2, clip.y1, clip.y2);
 
 	// Get panel info from DRM struct
 	panel = drm_to_panel(fb->dev);
