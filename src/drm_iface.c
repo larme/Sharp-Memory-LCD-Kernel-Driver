@@ -182,7 +182,7 @@ static size_t sharp_memory_gray8_to_mono_tagged(u8 *buf, int width, int height, 
 {
 	int line, b8, b1;
 	unsigned char d;
-	int const tagged_line_len = 1 + width / 8;  // Only line number + data, no per-line trailer
+	int const tagged_line_len = 2 + width / 8;  // Back to original: line number + data + trailer
 
 	// Iterate over lines from [0, height)
 	for (line = 0; line < height; line++) {
@@ -219,8 +219,9 @@ static size_t sharp_memory_gray8_to_mono_tagged(u8 *buf, int width, int height, 
 			buf[(line * tagged_line_len) + 1 + (b8 / 8)] = d;
 		}
 
-		// Write the line number (no per-line trailer in multi-line mode)
+		// Write the line number and per-line trailer (both required per Sharp LCD protocol)
 		buf[line * tagged_line_len] = (u8)(y0 + 1); // Indexed from 1
+		buf[(line * tagged_line_len) + 1 + (width / 8)] = 0;  // Per-line trailer required
 		y0++;
 	}
 
